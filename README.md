@@ -193,6 +193,10 @@ The codebase includes prepared statements, CSRF tokens, `password_hash()`, login
 
 This repository mirrors a working storefront and back office. It does not include an automated test suite; the `scripts/i18n-*.php` and `api/db-diagnostic.php` helpers are the closest thing to health checks.
 
+## Authors
+
+Built by **Abdelaziz Al Harbi** ([@Azizfois2](https://github.com/Azizfois2)) and **Youssef Aziz** ([@azizyoussef1907-max](https://github.com/azizyoussef1907-max)).
+
 ## License
 
 No license file is included. The source is published for viewing and portfolio purposes; all rights are reserved by the author. Add a `LICENSE` file if you intend to allow reuse or contribution.
