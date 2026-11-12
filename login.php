@@ -396,7 +396,7 @@ function clearGlobalLoginAttempts(PDO $pdo, string $attemptKey): void
 
         <!-- ── Côté image ─────────────────────────────────────── -->
         <div class="hero-side">
-            <img src="signup.png" alt="Gaming setup workspace">
+            <img src="signup.webp" alt="Gaming setup workspace">
             <div class="hero-overlay">
                 <span class="hero-kicker"><?= i18n_t('auth.account_access', [], 'Account access') ?></span>
                 <h2><?= i18n_t('auth.your_setup_ready', [], 'Your setup is waiting') ?></h2>

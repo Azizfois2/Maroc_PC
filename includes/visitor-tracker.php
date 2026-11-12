@@ -403,7 +403,13 @@ if (!function_exists('visitorTrackerBoot')) {
                 adminEnsureAdminSuiteTables($pdo);
             }
             if (function_exists('adminVisitorArchiveOldLogs')) {
-                adminVisitorArchiveOldLogs($pdo);
+                // Archiving is maintenance work, not page rendering: check at most
+                // once every five minutes per session instead of on every view.
+                $lastArchiveCheck = (int) ($_SESSION['visitor_archive_checked_at'] ?? 0);
+                if ($lastArchiveCheck < time() - 300) {
+                    adminVisitorArchiveOldLogs($pdo);
+                    $_SESSION['visitor_archive_checked_at'] = time();
+                }
             }
 
             $ip = visitorGetClientIp();

@@ -33,7 +33,7 @@ $error = $valid ? '' : (string) ($validation['error'] ?? 'This reset link is inv
 
     <div class="container login-container">
         <div class="hero-side">
-            <img src="signup.png" alt="<?= i18n_t('auth.reset_hero_alt', [], 'Gaming setup') ?>">
+            <img src="signup.webp" alt="<?= i18n_t('auth.reset_hero_alt', [], 'Gaming setup') ?>">
             <div class="hero-overlay">
                 <h2><?= i18n_t('auth.reset_secure_title', [], 'Secure Reset') ?></h2>
                 <p><?= i18n_t('auth.reset_secure_desc', [], 'Choose a strong password you have not used before.') ?></p>

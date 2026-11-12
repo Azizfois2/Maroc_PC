@@ -10,8 +10,7 @@
   function preloadCriticalResources() {
     const criticalImages = [
       'logo.png',
-      'gpu.png',
-      'gup-light.png'
+      'laptop.webp'
     ];
 
     criticalImages.forEach(src => {

@@ -14,45 +14,100 @@ $adminEmail = trim((string) ($_SESSION['admin_email'] ?? ''));
 $adminDisplayName = $adminName === 'Administrator' || $adminName === 'System Administrator'
     ? adminPhrase($adminName)
     : $adminName;
-$hasOrders = adminTableExists($pdo, 'orders');
-$hasClients = adminTableExists($pdo, 'Client');
+$hasOrders = adminTableExistsCached($pdo, 'orders');
+$hasClients = adminTableExistsCached($pdo, 'Client');
 
-// Enhanced statistics with trends and comparisons
+// Enhanced statistics with trends and comparisons.
+// Three aggregate queries replace the previous ~18 individual round trips.
 $stats = [
-    // Inventory metrics
-    'products' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM products'),
-    'laptops' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM laptops'),
-    'stock' => (int) adminFetchValue($pdo, 'SELECT (SELECT COALESCE(SUM(stock_quantity), 0) FROM products) + (SELECT COALESCE(SUM(stock_quantity), 0) FROM laptops)'),
-    'stock_value' => (float) adminFetchValue($pdo, 'SELECT (SELECT COALESCE(SUM(stock_quantity * price), 0) FROM products) + (SELECT COALESCE(SUM(stock_quantity * price), 0) FROM laptops)'),
-    'alerts' => (int) adminFetchValue($pdo, 'SELECT (SELECT COUNT(*) FROM products WHERE stock_quantity <= reorder_level) + (SELECT COUNT(*) FROM laptops WHERE stock_quantity <= reorder_level)'),
-    'out_of_stock' => (int) adminFetchValue($pdo, 'SELECT (SELECT COUNT(*) FROM products WHERE stock_quantity <= 0 OR in_stock = 0) + (SELECT COUNT(*) FROM laptops WHERE stock_quantity <= 0)'),
-    
-    // Customer metrics
-    'customers' => $hasClients ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM Client') : 0,
-    'customers_week' => $hasClients ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM Client WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)') : 0,
-    'customers_month' => $hasClients ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM Client WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)') : 0,
-    
-    // Order metrics
-    'orders' => $hasOrders ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM orders') : 0,
-    'orders_today' => $hasOrders ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM orders WHERE DATE(created_at) = CURDATE()') : 0,
-    'orders_week' => $hasOrders ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)') : 0,
-    'orders_month' => $hasOrders ? (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)') : 0,
-    'pending' => $hasOrders ? (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM orders WHERE status IN ('pending', 'processing')") : 0,
-    'completed' => $hasOrders ? (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM orders WHERE status = 'delivered'") : 0,
-    'cancelled' => $hasOrders ? (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM orders WHERE status = 'cancelled'") : 0,
-    
-    // Revenue metrics
-    'revenue' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != "cancelled"') : 0.0,
-    'revenue_today' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(SUM(total), 0) FROM orders WHERE DATE(created_at) = CURDATE() AND status != "cancelled"') : 0.0,
-    'revenue_week' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status != "cancelled"') : 0.0,
-    'revenue_month' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) AND status != "cancelled"') : 0.0,
-    'revenue_last_month' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(SUM(total), 0) FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) AND status != "cancelled"') : 0.0,
-    'avg_order' => $hasOrders ? (float) adminFetchValue($pdo, 'SELECT COALESCE(AVG(total), 0) FROM orders WHERE status != "cancelled"') : 0.0,
-    
-    // Performance metrics
-    'conversion_rate' => 0.0, // Will calculate below
-    'fulfillment_rate' => 0.0, // Will calculate below
+    'products' => 0,
+    'laptops' => 0,
+    'stock' => 0,
+    'stock_value' => 0.0,
+    'alerts' => 0,
+    'out_of_stock' => 0,
+    'customers' => 0,
+    'customers_week' => 0,
+    'customers_month' => 0,
+    'orders' => 0,
+    'orders_today' => 0,
+    'orders_week' => 0,
+    'orders_month' => 0,
+    'pending' => 0,
+    'completed' => 0,
+    'cancelled' => 0,
+    'revenue' => 0.0,
+    'revenue_today' => 0.0,
+    'revenue_week' => 0.0,
+    'revenue_month' => 0.0,
+    'revenue_last_month' => 0.0,
+    'avg_order' => 0.0,
+    'conversion_rate' => 0.0,
+    'fulfillment_rate' => 0.0,
+    'revenue_growth' => 0.0,
 ];
+
+$inventoryRow = adminFetchAll($pdo, '
+    SELECT
+        (SELECT COUNT(*) FROM products) AS products,
+        (SELECT COUNT(*) FROM laptops) AS laptops,
+        (SELECT COALESCE(SUM(stock_quantity), 0) FROM products)
+            + (SELECT COALESCE(SUM(stock_quantity), 0) FROM laptops) AS stock,
+        (SELECT COALESCE(SUM(stock_quantity * price), 0) FROM products)
+            + (SELECT COALESCE(SUM(stock_quantity * price), 0) FROM laptops) AS stock_value,
+        (SELECT COUNT(*) FROM products WHERE stock_quantity <= reorder_level)
+            + (SELECT COUNT(*) FROM laptops WHERE stock_quantity <= reorder_level) AS alerts,
+        (SELECT COUNT(*) FROM products WHERE stock_quantity <= 0 OR in_stock = 0)
+            + (SELECT COUNT(*) FROM laptops WHERE stock_quantity <= 0) AS out_of_stock
+');
+if ($inventoryRow) {
+    $row = $inventoryRow[0];
+    $stats['products'] = (int) $row['products'];
+    $stats['laptops'] = (int) $row['laptops'];
+    $stats['stock'] = (int) $row['stock'];
+    $stats['stock_value'] = (float) $row['stock_value'];
+    $stats['alerts'] = (int) $row['alerts'];
+    $stats['out_of_stock'] = (int) $row['out_of_stock'];
+}
+
+if ($hasClients) {
+    $row = adminFetchAll($pdo, '
+        SELECT
+            COUNT(*) AS customers,
+            COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)), 0) AS customers_week,
+            COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 0) AS customers_month
+        FROM Client
+    ')[0] ?? [];
+    $stats['customers'] = (int) ($row['customers'] ?? 0);
+    $stats['customers_week'] = (int) ($row['customers_week'] ?? 0);
+    $stats['customers_month'] = (int) ($row['customers_month'] ?? 0);
+}
+
+if ($hasOrders) {
+    $row = adminFetchAll($pdo, "
+        SELECT
+            COUNT(*) AS orders,
+            COALESCE(SUM(DATE(created_at) = CURDATE()), 0) AS orders_today,
+            COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)), 0) AS orders_week,
+            COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 0) AS orders_month,
+            COALESCE(SUM(status IN ('pending', 'processing')), 0) AS pending,
+            COALESCE(SUM(status = 'delivered'), 0) AS completed,
+            COALESCE(SUM(status = 'cancelled'), 0) AS cancelled,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' AND DATE(created_at) = CURDATE() THEN total ELSE 0 END), 0) AS revenue_today,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN total ELSE 0 END), 0) AS revenue_week,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN total ELSE 0 END), 0) AS revenue_month,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) THEN total ELSE 0 END), 0) AS revenue_last_month,
+            COALESCE(AVG(CASE WHEN status != 'cancelled' THEN total END), 0) AS avg_order
+        FROM orders
+    ")[0] ?? [];
+    foreach (['orders', 'orders_today', 'orders_week', 'orders_month', 'pending', 'completed', 'cancelled'] as $key) {
+        $stats[$key] = (int) ($row[$key] ?? 0);
+    }
+    foreach (['revenue', 'revenue_today', 'revenue_week', 'revenue_month', 'revenue_last_month', 'avg_order'] as $key) {
+        $stats[$key] = (float) ($row[$key] ?? 0);
+    }
+}
 
 // Calculate conversion rate (orders / customers * 100)
 if ($stats['customers'] > 0) {
@@ -71,7 +126,7 @@ if ($stats['revenue_last_month'] > 0) {
 }
 
 // Flash sales data
-$hasFlashSales = adminTableExists($pdo, 'flash_sales');
+$hasFlashSales = adminTableExistsCached($pdo, 'flash_sales');
 $flashSales = [];
 $activeFlashCount = 0;
 if ($hasFlashSales) {
@@ -81,7 +136,15 @@ if ($hasFlashSales) {
         JOIN products p ON p.id = fs.product_id
         ORDER BY fs.ends_at DESC
     ");
-    $activeFlashCount = (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM flash_sales WHERE starts_at <= NOW() AND ends_at > NOW()");
+    $activeFlashCount = 0;
+    $now = time();
+    foreach ($flashSales as $sale) {
+        $starts = !empty($sale['starts_at']) ? strtotime((string) $sale['starts_at']) : null;
+        $ends = !empty($sale['ends_at']) ? strtotime((string) $sale['ends_at']) : null;
+        if (($starts === null || $starts <= $now) && ($ends === null || $ends > $now)) {
+            $activeFlashCount++;
+        }
+    }
 }
 
 $allProducts = adminFetchAll($pdo, 'SELECT id, name, price, brand FROM products ORDER BY name ASC');

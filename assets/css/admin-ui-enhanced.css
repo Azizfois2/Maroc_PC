@@ -150,7 +150,7 @@
         radial-gradient(circle at top, rgba(10, 143, 134, 0.08), transparent 24%),
         /* Light theme: wash the image nearly white so it becomes a faint blueprint texture. */
         linear-gradient(180deg, rgba(244, 248, 251, 0.94) 0%, rgba(237, 243, 247, 0.97) 100%),
-        url('../../admin_bg.png') center top / cover no-repeat fixed,
+        url('../../admin_bg.webp') center top / cover no-repeat fixed,
         linear-gradient(180deg, #f4f8fb 0%, #edf3f7 100%);
 }
 

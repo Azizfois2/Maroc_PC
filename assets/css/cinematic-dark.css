@@ -625,7 +625,7 @@ a {
   /* Cinematic vignette */
   background-image: 
     radial-gradient(ellipse at center, transparent 0%, rgba(3, 4, 5, 0.4) 70%, rgba(3, 4, 5, 0.9) 100%),
-    url('gpu.png');
+    url('gpu.webp');
   background-size: cover, cover;
   background-position: center, center;
 

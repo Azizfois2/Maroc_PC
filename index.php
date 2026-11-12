@@ -15,7 +15,7 @@ storeHead(
     ],
     ['assets/js/wishlist.js'],
     i18n_t('home.description'),
-    'https://marocpc.com/gpu.png'
+    'https://marocpc.com/gpu.webp'
 );
 ?>
     <script>
@@ -43,7 +43,7 @@ storeHead(
             };
 
             bindThemedMedia('heroVideo', 'gpu.mp4', 'gpu-light.mp4', true);
-            bindThemedMedia('laptopImage', 'laptop.png', 'laptop-light.png');
+            bindThemedMedia('laptopImage', 'laptop.webp', 'laptop-light.webp');
         });
     </script>
 
@@ -56,7 +56,7 @@ storeHead(
       "description": "Premium computer hardware store in Morocco",
       "url": "https://marocpc.com",
       "logo": "https://marocpc.com/logo.png",
-      "image": "https://marocpc.com/gpu.png",
+      "image": "https://marocpc.com/gpu.webp",
       "telephone": "+212618821949",
       "address": {
         "@type": "PostalAddress",

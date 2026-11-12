@@ -197,6 +197,7 @@ function adminInvalidateProductCache(): void
     adminClearCache('flash_sales');
     adminClearCache('recent_products');
     adminClearCache('low_stock');
+    adminClearCache('admin_sidebar_counts');
     adminClearCache('batch_');
 }
 
@@ -205,6 +206,7 @@ function adminInvalidateOrderCache(): void
     adminClearCache('dashboard_stats');
     adminClearCache('recent_orders');
     adminClearCache('order_stats');
+    adminClearCache('admin_sidebar_counts');
     adminClearCache('batch_');
 }
 
@@ -213,6 +215,7 @@ function adminInvalidateCustomerCache(): void
     adminClearCache('dashboard_stats');
     adminClearCache('customer_stats');
     adminClearCache('recent_customers');
+    adminClearCache('admin_sidebar_counts');
     adminClearCache('batch_');
 }
 
@@ -221,6 +224,7 @@ function adminInvalidateStockCache(): void
     adminClearCache('dashboard_stats');
     adminClearCache('stock_stats');
     adminClearCache('reorder_products');
+    adminClearCache('admin_sidebar_counts');
     adminClearCache('batch_');
 }
 
@@ -232,26 +236,68 @@ function adminEnsureOptimalIndexes(PDO $pdo): void
 {
     static $optimized = false;
     if ($optimized) return;
-    
+
+    // `CREATE INDEX IF NOT EXISTS` is MariaDB-only and silently fails on MySQL,
+    // so inspect information_schema first and create only what is missing.
+    $wanted = [
+        'products' => [
+            'idx_products_stock' => 'stock_quantity, reorder_level',
+            'idx_products_category' => 'category',
+            'idx_products_created' => 'created_at',
+        ],
+        'orders' => [
+            'idx_orders_status' => 'status',
+            'idx_orders_created' => 'created_at',
+            'idx_orders_client' => 'client_id',
+            'idx_orders_created_status' => 'created_at, status',
+        ],
+        'Client' => [
+            'idx_client_email' => 'email',
+            'idx_client_created' => 'created_at',
+        ],
+        'laptops' => [
+            'idx_laptops_stock' => 'stock_quantity, reorder_level',
+            'idx_laptops_created' => 'created_at',
+        ],
+        'scheduled_emails' => [
+            'idx_scheduled_status' => 'status',
+        ],
+        'restock_notifications' => [
+            'idx_restock_notified' => 'notified',
+        ],
+        'support_requests' => [
+            'idx_support_status' => 'status',
+        ],
+        'supplier_orders' => [
+            'idx_supplier_orders_status' => 'status',
+        ],
+    ];
+
     try {
-        // Products table indexes
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock_quantity, reorder_level)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_products_created ON products(created_at DESC)");
-        
-        // Orders table indexes
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client_id)");
-        
-        // Client table indexes
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_client_email ON Client(email)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_client_created ON Client(created_at DESC)");
-        
-        // Laptops table indexes
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_laptops_stock ON laptops(stock_quantity, reorder_level)");
-        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_laptops_created ON laptops(created_at DESC)");
-        
+        $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+        $tables = array_map('strval', $tables);
+
+        $existing = [];
+        foreach ($pdo->query('SELECT TABLE_NAME, INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = DATABASE()')->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $existing[$row['TABLE_NAME'] . '.' . $row['INDEX_NAME']] = true;
+        }
+
+        foreach ($wanted as $table => $indexes) {
+            if (!in_array($table, $tables, true)) {
+                continue;
+            }
+            foreach ($indexes as $name => $columns) {
+                if (isset($existing[$table . '.' . $name])) {
+                    continue;
+                }
+                try {
+                    $pdo->exec("CREATE INDEX `{$name}` ON `{$table}` ({$columns})");
+                } catch (Throwable $e) {
+                    // Another request may have created it, or the user lacks ALTER.
+                }
+            }
+        }
+
         $optimized = true;
     } catch (Throwable $e) {
         // Silently fail - indexes might already exist
@@ -262,11 +308,7 @@ function adminEnsureOptimalIndexes(PDO $pdo): void
 // AUTO-APPLY OPTIMIZATIONS
 // ============================================
 
-// Ensure indexes are created
-if (function_exists('db')) {
-    try {
-        adminEnsureOptimalIndexes(db());
-    } catch (Throwable $e) {
-        // Silently continue
-    }
-}
+// Index creation is intentionally NOT run on include. It used to fire ten
+// CREATE INDEX statements on every request (admin and storefront alike), which
+// is pure overhead once the indexes exist. It now runs as part of the one-time
+// schema bootstrap in adminEnsureAdminSuiteTables().

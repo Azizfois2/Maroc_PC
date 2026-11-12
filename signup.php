@@ -321,7 +321,7 @@ function ensureNewsletterSubscribersTable(PDO $pdo): void
 
         <!-- ── Côté image ─────────────────────────────────────── -->
         <div class="hero-side">
-            <img src="signup.png" alt="<?= $signupAttr('Gaming setup workspace') ?>">
+            <img src="signup.webp" alt="<?= $signupAttr('Gaming setup workspace') ?>">
             <div class="hero-overlay">
                 <span class="hero-kicker"><?= $signupAttr('New account') ?></span>
                 <h2><?= $signupAttr('Build smarter with Maroc PC') ?></h2>

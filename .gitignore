@@ -9,6 +9,9 @@ scratch/
 vendor/
 .dist/
 
+# Runtime schema marker / writable state
+var/
+
 # IDE / editor folders
 .vscode/
 .kiro/

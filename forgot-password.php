@@ -26,7 +26,7 @@ require_once __DIR__ . '/includes/i18n.php';
 
     <div class="container login-container">
         <div class="hero-side">
-            <img src="signup.png" alt="<?= i18n_t('auth.forgot_hero_alt', [], 'Gaming setup') ?>">
+            <img src="signup.webp" alt="<?= i18n_t('auth.forgot_hero_alt', [], 'Gaming setup') ?>">
             <div class="hero-overlay">
                 <h2><?= i18n_t('auth.forgot_locked_out', [], 'Locked Out?') ?></h2>
                 <p><?= i18n_t('auth.forgot_hero_desc', [], 'No worries. We will send a secure reset link to your email.') ?></p>

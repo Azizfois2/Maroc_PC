@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 define('REMEMBER_ME_SECONDS', 30 * 24 * 3600);
 
+// Bump this when the on-demand schema helpers change so the one-time
+// migration runs again after a deployment.
+define('APP_SCHEMA_VERSION', '2026-11-12.1');
+
 function secureCookieActive(): bool
 {
     return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';

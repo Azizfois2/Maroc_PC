@@ -324,7 +324,7 @@ function clearAdminLoginAttempts(PDO $pdo, string $attemptKey): void
     <div class="container login-container" id="loginContainer">
         <!-- ── Côté image ─────────────────────────────────────── -->
         <div class="hero-side">
-            <img src="admin_bg.png" alt="Admin Dashboard Background">
+            <img src="admin_bg.webp" alt="Admin Dashboard Background">
             <div class="hero-overlay" style="background: rgba(0,0,0,0.8); z-index: 10;">
                 <h2 style="color: var(--cyan);"><?php i18n_e('auth.admin_portal', [], 'Admin Portal'); ?></h2>
                 <p><?php i18n_e('auth.admin_restricted_hint', [], 'Restricted access. System control, analytics, and catalog management.'); ?></p>

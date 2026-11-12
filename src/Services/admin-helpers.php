@@ -437,6 +437,20 @@ function adminTableExists(PDO $pdo, string $table): bool
     return (bool) $stmt->fetch(PDO::FETCH_NUM);
 }
 
+/**
+ * Request-scoped existence check for read-only screens. Unlike adminTableExists
+ * it is not invalidated after CREATE TABLE, so only use it where the code does
+ * not create the table in the same request.
+ */
+function adminTableExistsCached(PDO $pdo, string $table): bool
+{
+    static $cache = [];
+    if (!array_key_exists($table, $cache)) {
+        $cache[$table] = adminTableExists($pdo, $table);
+    }
+    return $cache[$table];
+}
+
 function adminColumnExists(PDO $pdo, string $table, string $column): bool
 {
     if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
@@ -553,6 +567,7 @@ function adminClearCache(string $pattern = null): void
 function adminEnsureSettingsTable(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_settings'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_settings'] = true; return; }
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS admin_settings (
             setting_key VARCHAR(120) PRIMARY KEY,
@@ -563,10 +578,22 @@ function adminEnsureSettingsTable(PDO $pdo): void
     $_SESSION['admin_ensured_settings'] = true;
 }
 
+function &adminSettingCache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
 function adminSetting(PDO $pdo, string $key, $default = null)
 {
+    $cache = &adminSettingCache();
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
     adminEnsureSettingsTable($pdo);
-    return adminFetchValue($pdo, 'SELECT setting_value FROM admin_settings WHERE setting_key = ?', [$key], $default);
+    $cache[$key] = adminFetchValue($pdo, 'SELECT setting_value FROM admin_settings WHERE setting_key = ?', [$key], $default);
+    return $cache[$key];
 }
 
 function adminSetSetting(PDO $pdo, string $key, $value): void
@@ -578,11 +605,14 @@ function adminSetSetting(PDO $pdo, string $key, $value): void
         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
     ");
     $stmt->execute([$key, (string) $value]);
+    $cache = &adminSettingCache();
+    $cache[$key] = (string) $value;
 }
 
 function adminEnsureProductAdminColumns(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_products'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_products'] = true; return; }
     if (!adminTableExists($pdo, 'products')) {
         $pdo->exec("
             CREATE TABLE products (
@@ -628,6 +658,7 @@ function adminEnsureProductAdminColumns(PDO $pdo): void
 function adminEnsureClientMarketingColumns(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_client_marketing'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_client_marketing'] = true; return; }
     if (!adminTableExists($pdo, 'Client')) {
         return;
     }
@@ -645,6 +676,7 @@ function adminEnsureClientMarketingColumns(PDO $pdo): void
 function adminEnsureMarketingTables(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_marketing'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_marketing'] = true; return; }
     adminEnsureClientMarketingColumns($pdo);
 
     $pdo->exec("
@@ -705,6 +737,7 @@ function adminEnsureMarketingTables(PDO $pdo): void
 function adminEnsureFlashSalesTable(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_flash_sales'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_flash_sales'] = true; return; }
     adminEnsureProductAdminColumns($pdo);
 
     $pdo->exec("
@@ -740,6 +773,7 @@ function adminEnsureFlashSalesTable(PDO $pdo): void
 function adminEnsureHomepageGamerReviewsTable(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_homepage_reviews'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_homepage_reviews'] = true; return; }
     adminEnsureSettingsTable($pdo);
 
     $pdo->exec("
@@ -840,6 +874,7 @@ function adminEnsureHomepageGamerReviewsTable(PDO $pdo): void
 function adminEnsureFeedbackTestimonialApprovalsTable(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_feedback_approvals'])) return;
+    if (appSchemaIsCurrent()) { $_SESSION['admin_ensured_feedback_approvals'] = true; return; }
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS feedback_testimonial_approvals (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1047,9 +1082,49 @@ function adminAcceptFeedbackApproval(PDO $pdo, string $token): array
     return ['success' => true, 'message' => 'Thank you. Your feedback is now approved for the Trusted by Gamers section.'];
 }
 
+/**
+ * One-time schema marker.
+ *
+ * The admin "ensure*" helpers create tables and columns on demand. Running them
+ * on every request (or every new session) costs dozens of DDL/metadata round
+ * trips, so the work is done once per deployment and recorded in this marker.
+ * When the marker directory is not writable we fall back to the session flag.
+ */
+function appSchemaMarkerFile(): string
+{
+    $dir = ROOT_PATH . DIRECTORY_SEPARATOR . 'var';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    $version = defined('APP_SCHEMA_VERSION') ? APP_SCHEMA_VERSION : '1';
+    $database = defined('DB_NAME') ? (string) DB_NAME : '';
+    $suffix = $database !== '' ? '-' . substr(md5($database), 0, 8) : '';
+    return $dir . DIRECTORY_SEPARATOR . 'schema-' . preg_replace('/[^0-9A-Za-z._-]/', '-', $version) . $suffix . '.ok';
+}
+
+function appSchemaIsCurrent(): bool
+{
+    return is_file(appSchemaMarkerFile());
+}
+
+function appSchemaMarkCurrent(): void
+{
+    $marker = appSchemaMarkerFile();
+    if (!is_file($marker)) {
+        @file_put_contents($marker, date('c'));
+    }
+}
+
 function adminEnsureAdminSuiteTables(PDO $pdo): void
 {
     if (!empty($_SESSION['admin_ensured_suite_tables'])) return;
+
+    // Already migrated by an earlier request: skip every DDL statement below.
+    if (appSchemaIsCurrent()) {
+        $_SESSION['admin_ensured_suite_tables'] = true;
+        return;
+    }
+
     adminEnsureSettingsTable($pdo);
     adminEnsureProductAdminColumns($pdo);
     adminEnsureMarketingTables($pdo);
@@ -1334,6 +1409,12 @@ function adminEnsureAdminSuiteTables(PDO $pdo): void
     if (!in_array('max_displays', $laptopCols)) {
         $pdo->exec("ALTER TABLE laptops ADD COLUMN max_displays INT DEFAULT 1");
     }
+
+    if (function_exists('adminEnsureOptimalIndexes')) {
+        adminEnsureOptimalIndexes($pdo);
+    }
+
+    appSchemaMarkCurrent();
     $_SESSION['admin_ensured_suite_tables'] = true;
 }
 
@@ -1891,13 +1972,30 @@ function adminPageStart(string $title, string $active): void
     ];
     try {
         $pdo = db();
-        $pendingOrderCount = (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM `Order` WHERE status = 'pending'");
-        $sidebarCounts['products'] = (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM products');
-        $sidebarCounts['laptops'] = (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM laptops');
-        $sidebarCounts['stock'] = (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM products WHERE stock_quantity <= reorder_level OR stock_quantity <= 0 OR in_stock = 0');
-        $sidebarCounts['procurement'] = (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM supplier_orders WHERE status IN ("pending","ordered","partial")');
-        $sidebarCounts['orders'] = (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM `Order` WHERE status IN ('pending','processing')");
-        $sidebarCounts['diagnostics'] = (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM support_requests WHERE status IN ("new","open","pending")');
+        // Sidebar badges are identical on every admin page, so compute them once
+        // per session instead of on each navigation.
+        $loadSidebarCounts = function () use ($pdo): array {
+            return [
+                'pending' => (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM `Order` WHERE status = 'pending'"),
+                'products' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM products'),
+                'laptops' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM laptops'),
+                'stock' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM products WHERE stock_quantity <= reorder_level OR stock_quantity <= 0 OR in_stock = 0'),
+                'procurement' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM supplier_orders WHERE status IN ("pending","ordered","partial")'),
+                'orders' => (int) adminFetchValue($pdo, "SELECT COUNT(*) FROM `Order` WHERE status IN ('pending','processing')"),
+                'diagnostics' => (int) adminFetchValue($pdo, 'SELECT COUNT(*) FROM support_requests WHERE status IN ("new","open","pending")'),
+            ];
+        };
+        $sidebarData = function_exists('adminCachedFetch')
+            ? adminCachedFetch($pdo, 'admin_sidebar_counts', $loadSidebarCounts, 300)
+            : $loadSidebarCounts();
+
+        $pendingOrderCount = (int) ($sidebarData['pending'] ?? 0);
+        $sidebarCounts['products'] = (int) ($sidebarData['products'] ?? 0);
+        $sidebarCounts['laptops'] = (int) ($sidebarData['laptops'] ?? 0);
+        $sidebarCounts['stock'] = (int) ($sidebarData['stock'] ?? 0);
+        $sidebarCounts['procurement'] = (int) ($sidebarData['procurement'] ?? 0);
+        $sidebarCounts['orders'] = (int) ($sidebarData['orders'] ?? 0);
+        $sidebarCounts['diagnostics'] = (int) ($sidebarData['diagnostics'] ?? 0);
     } catch (Exception $e) {
         $pendingOrderCount = 0;
     }

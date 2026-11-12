@@ -248,7 +248,7 @@ $homepageCategoryCount = static function (array $keys, string $fallback) use ($h
             </header>
 
             <figure class="laptop-promo-visual" aria-label="Curated laptop finder preview">
-                <img id="laptopImage" src="laptop.png" alt="Premium laptop on an engineering workbench" loading="lazy">
+                <img id="laptopImage" src="laptop.webp" alt="Premium laptop on an engineering workbench" loading="lazy">
                 <span class="laptop-promo-badge"><?php i18n_e('home.curated_hardware_profiles'); ?></span>
             </figure>
 

@@ -68,7 +68,7 @@
             if (laptopImage) {
                 const updateLaptopImage = () => {
                     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-                    const newSrc = theme === 'light' ? 'laptop-light.png' : 'laptop.png';
+                    const newSrc = theme === 'light' ? 'laptop-light.webp' : 'laptop.webp';
                     
                     const currentSrc = laptopImage.getAttribute('src');
                     if (currentSrc !== newSrc) {
@@ -92,7 +92,7 @@
       "description": "Premium computer hardware store in Morocco",
       "url": "https://marocpc.com",
       "logo": "https://marocpc.com/logo.png",
-      "image": "https://marocpc.com/gpu.png",
+      "image": "https://marocpc.com/gpu.webp",
       "telephone": "+212618821949",
       "email": "support@marocpc.com",
       "address": {
@@ -281,7 +281,7 @@
                 </header>
 
                 <figure class="laptop-promo-visual" aria-label="Curated laptop finder preview">
-                    <img id="laptopImage" src="laptop.png" alt="Premium laptop on an engineering workbench" loading="lazy">
+                    <img id="laptopImage" src="laptop.webp" alt="Premium laptop on an engineering workbench" loading="lazy">
                 </figure>
 
                 <div class="laptop-promo-grid">

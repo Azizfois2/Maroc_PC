@@ -65,7 +65,7 @@
 [data-theme="light"] .hero-bg {
   background-image: 
     radial-gradient(ellipse at center, rgba(232, 228, 223, 0.3) 0%, rgba(232, 228, 223, 0.8) 70%, rgba(232, 228, 223, 0.95) 100%),
-    url('gup-light.png');
+    url('gup-light.webp');
 }
 
 [data-theme="light"] .hero-bg::before {
